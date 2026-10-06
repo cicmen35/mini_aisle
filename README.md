@@ -133,7 +133,7 @@ make kind-down
 zero on SQS queue depth. The `patchloop` namespace enforces the restricted pod security
 standard: non-root, read-only root filesystem, no capabilities.
 
-## What Šimon implements next
+## What to implement next
 
 The build order, the exact tasks and the idea behind each layer are in
 [docs/plan.md](docs/plan.md). In the repo, start here:

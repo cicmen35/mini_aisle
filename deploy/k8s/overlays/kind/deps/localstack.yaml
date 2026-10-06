@@ -34,6 +34,18 @@ spec:
             limits: { cpu: "1", memory: 1Gi }
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: data, mountPath: /var/lib/localstack }
+            - { name: home, mountPath: /root }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+        - name: data
+          emptyDir: { sizeLimit: 512Mi }
+        - name: home
+          emptyDir: { sizeLimit: 128Mi }
 ---
 apiVersion: v1
 kind: Service

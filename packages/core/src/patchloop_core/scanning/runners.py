@@ -6,7 +6,7 @@ from pathlib import Path
 
 from patchloop_core.domain import ScannerName
 from patchloop_core.scanning import parsers
-from patchloop_core.scanning.base import ScannerRunner, ScanReport, run_tool
+from patchloop_core.scanning.base import TMP_DIR, ScannerRunner, ScanReport, run_tool
 
 
 class BanditRunner:
@@ -58,7 +58,7 @@ class SemgrepRunner:
             cwd=target_dir,
             timeout_seconds=self.timeout_seconds,
             ok_exit_codes=frozenset({0, 1}),
-            extra_env={"SEMGREP_SEND_METRICS": "off", "XDG_CONFIG_HOME": "/tmp"},  # noqa: S108
+            extra_env={"SEMGREP_SEND_METRICS": "off", "XDG_CONFIG_HOME": TMP_DIR},
         )
         return ScanReport(
             scanner=self.name,
@@ -97,7 +97,7 @@ class PipAuditRunner:
             cwd=target_dir,
             timeout_seconds=self.timeout_seconds,
             ok_exit_codes=frozenset({0, 1}),
-            extra_env={"PIP_AUDIT_CACHE_DIR": "/tmp/pip-audit-cache"},  # noqa: S108
+            extra_env={"PIP_AUDIT_CACHE_DIR": f"{TMP_DIR}/pip-audit-cache"},
         )
         return ScanReport(
             scanner=self.name,

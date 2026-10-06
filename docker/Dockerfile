@@ -27,10 +27,11 @@ FROM ${PYTHON_IMAGE} AS tools
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_TOOL_DIR=/opt/tools/venvs UV_TOOL_BIN_DIR=/opt/tools/bin UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
+COPY docker/tool-overrides.txt /tmp/overrides.txt
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv tool install semgrep==1.157.0 \
- && uv tool install "bandit[toml]==1.9.2" \
- && uv tool install pip-audit==2.9.0
+    uv tool install --overrides /tmp/overrides.txt semgrep==1.157.0 \
+ && uv tool install --overrides /tmp/overrides.txt "bandit[toml]==1.9.4" \
+ && uv tool install --overrides /tmp/overrides.txt pip-audit==2.9.0
 
 # ---------------------------------------------------------------- runtime base
 FROM ${PYTHON_IMAGE} AS runtime

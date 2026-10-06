@@ -1,0 +1,7 @@
+# Force patched versions of transitive deps that the scanner tools pin too tightly.
+# Applied with `uv tool install --overrides` in docker/Dockerfile; re-check with `make security`.
+pyjwt>=2.14.0
+mcp==1.28.1
+urllib3>=2.8.0
+msgpack>=1.2.1
+setuptools>=78.1.1

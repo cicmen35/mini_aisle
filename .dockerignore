@@ -4,6 +4,7 @@
 !packages/**
 !services/**
 !infra/terraform/**
+!docker/tool-overrides.txt
 **/__pycache__
 **/*.pyc
 **/.terraform

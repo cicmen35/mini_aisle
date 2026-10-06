@@ -1,0 +1,188 @@
+# Local stack: Postgres + LocalStack (SQS/S3/IAM), provisioned by Terraform, plus the services.
+#   make up                    # everything (mock LLM)
+#   make deps-up               # only postgres + localstack + terraform (for integration tests)
+#   docker compose --profile ollama up -d    # adds a local Ollama for the fixer
+name: patchloop
+
+x-aws-env: &aws-env
+  PATCHLOOP_AWS_ENDPOINT_URL: http://localstack:4566
+  PATCHLOOP_AWS_REGION: ${AWS_REGION:-eu-central-1}
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+
+x-app-env: &app-env
+  <<: *aws-env
+  PATCHLOOP_ENV: local
+  PATCHLOOP_LOG_LEVEL: ${PATCHLOOP_LOG_LEVEL:-INFO}
+  PATCHLOOP_DATABASE_URL: postgresql+psycopg://patchloop:${POSTGRES_PASSWORD:-patchloop}@postgres:5432/patchloop
+  PATCHLOOP_LLM_PROVIDER: ${PATCHLOOP_LLM_PROVIDER:-mock}
+  PATCHLOOP_OLLAMA_BASE_URL: http://ollama:11434
+  PATCHLOOP_OLLAMA_MODEL: ${PATCHLOOP_OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+
+# Container hardening shared by every service we build.
+x-hardened: &hardened
+  read_only: true
+  tmpfs:
+    - /tmp:size=512m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+
+x-after-infra: &after-infra
+  postgres:
+    condition: service_healthy
+  infra:
+    condition: service_completed_successfully
+  migrate:
+    condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: patchloop
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patchloop}
+      POSTGRES_DB: patchloop
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-15432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U patchloop -d patchloop"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]
+
+  localstack:
+    # 4.14 is the last community image that runs without an auth token (2026.x requires one).
+    image: localstack/localstack:4.14
+    environment:
+      SERVICES: sqs,s3,iam,sts
+      AWS_DEFAULT_REGION: ${AWS_REGION:-eu-central-1}
+    ports:
+      - "127.0.0.1:${LOCALSTACK_PORT:-4566}:4566"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  # One-shot: terraform apply against LocalStack. State lives in the tfstate volume.
+  infra:
+    build:
+      context: .
+      dockerfile: docker/terraform.Dockerfile
+    image: patchloop-infra:local
+    environment:
+      <<: *aws-env
+      TF_VAR_localstack_endpoint: http://localstack:4566
+    volumes:
+      - tfstate:/work
+    depends_on:
+      localstack:
+        condition: service_healthy
+    restart: "no"
+
+  # One-shot: alembic upgrade head.
+  migrate:
+    build: &api-build
+      context: .
+      dockerfile: docker/Dockerfile
+      target: api
+      args: { SERVICE: api }
+    image: patchloop-api:local
+    command: ["patchloop-migrate"]
+    environment: *app-env
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    <<: *hardened
+    restart: "no"
+
+  api:
+    build: *api-build
+    image: patchloop-api:local
+    environment: *app-env
+    ports:
+      - "127.0.0.1:${API_PORT:-8420}:8000"
+    depends_on: *after-infra
+    <<: *hardened
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+
+  scanner:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: scanner
+      args: { SERVICE: scanner }
+    image: patchloop-scanner:local
+    environment: *app-env
+    depends_on: *after-infra
+    <<: *hardened
+    # Runs untrusted code analysis: tight limits.
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+
+  fixer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: fixer
+      args: { SERVICE: fixer }
+    image: patchloop-fixer:local
+    environment: *app-env
+    depends_on: *after-infra
+    <<: *hardened
+    mem_limit: 512m
+    cpus: 0.5
+    pids_limit: 128
+
+  verifier:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: verifier
+      args: { SERVICE: verifier }
+    image: patchloop-verifier:local
+    environment: *app-env
+    depends_on: *after-infra
+    <<: *hardened
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+
+  # Optional local LLM: docker compose --profile ollama up -d && PATCHLOOP_LLM_PROVIDER=ollama
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    profiles: [ollama]
+    entrypoint: ["ollama", "pull", "${PATCHLOOP_OLLAMA_MODEL:-qwen2.5-coder:1.5b}"]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  pgdata:
+  tfstate:
+  ollama:

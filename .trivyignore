@@ -1,0 +1,20 @@
+# Accepted findings, each with a reason. Keep this list short and reviewed.
+
+# HTTPS egress to 0.0.0.0/0 from tasks: there is no NAT gateway or VPC interface endpoints
+# (cost), so tasks reach SQS/ECR/CloudWatch/LLM APIs over the internet on 443 only.
+# Production: interface endpoints + egress restricted to the endpoint SG / prefix lists.
+AVD-AWS-0104
+AWS-0104
+
+# Customer-managed KMS keys ($1/month each) for S3 and SNS. AWS-managed encryption is used.
+AVD-AWS-0132
+AWS-0132
+AVD-AWS-0136
+AWS-0136
+
+# Copies vendored inside pip 26.2.1 (latest) in the pip-audit tool venv of the scanner/verifier
+# images. pip-audit runs with --disable-pip, so this pip never executes. Re-check on pip releases.
+GHSA-6v7p-g79w-8964
+CVE-2025-47273
+CVE-2026-97687
+CVE-2026-97689

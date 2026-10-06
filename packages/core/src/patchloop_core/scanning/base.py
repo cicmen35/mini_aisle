@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Protocol, runtime_checkable
 from patchloop_core.domain import ScannerName, Severity
 
 MAX_OUTPUT_BYTES = 10 * 1024 * 1024
+TMP_DIR = tempfile.gettempdir()
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,11 +73,12 @@ def run_tool(
     a hard timeout, and capped output. Process-level isolation (non-root, read-only rootfs,
     no capabilities, pids/memory limits) is enforced by the container, see docker-compose.yml.
     """
-    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": "/tmp", "LANG": "C.UTF-8"}  # noqa: S108
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": TMP_DIR, "LANG": "C.UTF-8"}
     env.update(extra_env or {})
     started = time.monotonic()
     try:
-        proc = subprocess.run(  # noqa: S603  # nosec B603 - argv list, no shell
+        # argv list and no shell, so no shell injection is possible.
+        proc = subprocess.run(  # noqa: S603  # nosec B603
             argv,
             cwd=cwd,
             env=env,

@@ -22,9 +22,10 @@ locals {
 }
 
 provider "aws" {
-  region     = var.region
-  access_key = "test"
-  secret_key = "test"
+  region = var.region
+  # LocalStack's documented dummy credentials, not a secret.
+  access_key = "test" # nosemgrep: terraform.aws.security.aws-provider-static-credentials.aws-provider-static-credentials
+  secret_key = "test" # nosemgrep: terraform.aws.security.aws-provider-static-credentials.aws-provider-static-credentials
 
   skip_credentials_validation = true
   skip_metadata_api_check     = true

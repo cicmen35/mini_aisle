@@ -1,0 +1,74 @@
+# KEDA polls ApproximateNumberOfMessages (+ in-flight) and drives each worker Deployment's
+# replica count: 0 when the queue is empty, ceil(depth / queueLength) up to maxReplicaCount.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: localstack-sqs
+  namespace: patchloop
+spec:
+  secretTargetRef:
+    - { parameter: awsAccessKeyID, name: patchloop-secrets, key: AWS_ACCESS_KEY_ID }
+    - { parameter: awsSecretAccessKey, name: patchloop-secrets, key: AWS_SECRET_ACCESS_KEY }
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: scanner
+  namespace: patchloop
+spec:
+  scaleTargetRef: { name: scanner }
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  pollingInterval: 10
+  cooldownPeriod: 120
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef: { name: localstack-sqs }
+      metadata:
+        queueURL: http://localstack.patchloop-deps.svc.cluster.local:4566/000000000000/patchloop-scan-requests
+        queueLength: "2"
+        awsRegion: eu-central-1
+        awsEndpoint: http://localstack.patchloop-deps.svc.cluster.local:4566
+        scaleOnInFlight: "true"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: fixer
+  namespace: patchloop
+spec:
+  scaleTargetRef: { name: fixer }
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  pollingInterval: 10
+  cooldownPeriod: 120
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef: { name: localstack-sqs }
+      metadata:
+        queueURL: http://localstack.patchloop-deps.svc.cluster.local:4566/000000000000/patchloop-fix-requests
+        queueLength: "5"
+        awsRegion: eu-central-1
+        awsEndpoint: http://localstack.patchloop-deps.svc.cluster.local:4566
+        scaleOnInFlight: "true"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: verifier
+  namespace: patchloop
+spec:
+  scaleTargetRef: { name: verifier }
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  pollingInterval: 10
+  cooldownPeriod: 120
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef: { name: localstack-sqs }
+      metadata:
+        queueURL: http://localstack.patchloop-deps.svc.cluster.local:4566/000000000000/patchloop-verify-requests
+        queueLength: "2"
+        awsRegion: eu-central-1
+        awsEndpoint: http://localstack.patchloop-deps.svc.cluster.local:4566
+        scaleOnInFlight: "true"

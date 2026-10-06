@@ -1,0 +1,43 @@
+# alembic upgrade head. Retries until Postgres is reachable.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: patchloop
+  labels:
+    app.kubernetes.io/name: migrate
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrate
+        app.kubernetes.io/part-of: patchloop
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: migrate
+          image: patchloop-api
+          command: ["patchloop-migrate"]
+          envFrom:
+            - configMapRef: { name: patchloop-config }
+            - secretRef: { name: patchloop-secrets }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 64Mi }

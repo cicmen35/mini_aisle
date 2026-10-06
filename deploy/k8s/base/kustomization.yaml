@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: patchloop
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: patchloop
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - api.yaml
+  - workers.yaml
+  - hpa.yaml
+  - networkpolicies.yaml
+
+configMapGenerator:
+  - name: patchloop-config
+    literals:
+      - PATCHLOOP_ENV=kind
+      - PATCHLOOP_LOG_LEVEL=INFO
+      - PATCHLOOP_AWS_REGION=eu-central-1
+      - PATCHLOOP_SCAN_QUEUE_NAME=patchloop-scan-requests
+      - PATCHLOOP_FIX_QUEUE_NAME=patchloop-fix-requests
+      - PATCHLOOP_VERIFY_QUEUE_NAME=patchloop-verify-requests
+      - PATCHLOOP_ARTIFACTS_BUCKET=patchloop-artifacts
+      - PATCHLOOP_LLM_PROVIDER=mock

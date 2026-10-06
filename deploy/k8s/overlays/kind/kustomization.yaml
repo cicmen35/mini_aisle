@@ -1,0 +1,35 @@
+# Local kind cluster: base app + dev-only backing services (Postgres, LocalStack) + jobs.
+#   make kind-up
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - deps
+  - migrate-job.yaml
+
+images:
+  - { name: patchloop-api, newName: patchloop-api, newTag: local }
+  - { name: patchloop-scanner, newName: patchloop-scanner, newTag: local }
+  - { name: patchloop-fixer, newName: patchloop-fixer, newTag: local }
+  - { name: patchloop-verifier, newName: patchloop-verifier, newTag: local }
+  - { name: patchloop-infra, newName: patchloop-infra, newTag: local }
+
+configMapGenerator:
+  - name: patchloop-config
+    namespace: patchloop
+    behavior: merge
+    literals:
+      - PATCHLOOP_AWS_ENDPOINT_URL=http://localstack.patchloop-deps.svc.cluster.local:4566
+
+# Dev-only credentials (LocalStack accepts anything). Real clusters: External Secrets / IRSA.
+secretGenerator:
+  - name: patchloop-secrets
+    namespace: patchloop
+    # Stable name: KEDA's TriggerAuthentication (a CRD) references it and kustomize can't rewrite it.
+    options:
+      disableNameSuffixHash: true
+    literals:
+      - PATCHLOOP_DATABASE_URL=postgresql+psycopg://patchloop:patchloop@postgres.patchloop-deps.svc.cluster.local:5432/patchloop
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test

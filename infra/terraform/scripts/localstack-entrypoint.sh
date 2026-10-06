@@ -6,8 +6,6 @@ set -eu
 : "${TF_VAR_localstack_endpoint:=http://localstack:4566}"
 export TF_VAR_localstack_endpoint
 STATE_PATH="${TF_STATE_PATH:-/work/terraform.tfstate}"
-mkdir -p "${TF_PLUGIN_CACHE_DIR:-/work/plugin-cache}"
-
 cd /infra/envs/localstack
 terraform init -input=false -no-color -backend-config="path=${STATE_PATH}" >/tmp/init.log 2>&1 \
   || { cat /tmp/init.log; exit 1; }

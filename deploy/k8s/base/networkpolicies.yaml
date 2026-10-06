@@ -1,0 +1,84 @@
+# Default deny, then allow only the flows the architecture needs:
+#   api       -> postgres, localstack (SQS/S3)
+#   scanner   -> postgres, localstack, internet:443 (git clone, pip-audit advisories)
+#   fixer     -> postgres, localstack, internet:443 (hosted LLM) / ollama
+#   verifier  -> postgres, localstack ONLY (it runs untrusted tests: no internet)
+# Backing services live in the patchloop-deps namespace (kind overlay); on AWS they are
+# managed services reached over 443/5432 instead.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backing-services
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/part-of: patchloop }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: patchloop-deps }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: postgres }
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: patchloop-deps }
+          podSelector:
+            matchLabels: { app.kubernetes.io/name: localstack }
+      ports:
+        - { protocol: TCP, port: 4566 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-ingress
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: api }
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - { protocol: TCP, port: 8000 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: internet-https-egress
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [scanner, fixer] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16]
+      ports:
+        - { protocol: TCP, port: 443 }

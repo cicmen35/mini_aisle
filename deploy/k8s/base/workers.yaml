@@ -1,0 +1,145 @@
+# Queue consumers. No Service and no ingress: they only pull from SQS.
+# terminationGracePeriodSeconds > 20s long-poll + in-flight work, so SIGTERM drains cleanly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scanner
+  labels:
+    app.kubernetes.io/name: scanner
+    patchloop.dev/role: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scanner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scanner
+        app.kubernetes.io/part-of: patchloop
+        patchloop.dev/role: worker
+    spec:
+      serviceAccountName: scanner
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: scanner
+          image: patchloop-scanner
+          envFrom:
+            - configMapRef: { name: patchloop-config }
+            - secretRef: { name: patchloop-secrets }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 2Gi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fixer
+  labels:
+    app.kubernetes.io/name: fixer
+    patchloop.dev/role: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fixer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fixer
+        app.kubernetes.io/part-of: patchloop
+        patchloop.dev/role: worker
+    spec:
+      serviceAccountName: fixer
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 150
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: fixer
+          image: patchloop-fixer
+          envFrom:
+            - configMapRef: { name: patchloop-config }
+            - secretRef: { name: patchloop-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { cpu: 500m, memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 512Mi }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verifier
+  labels:
+    app.kubernetes.io/name: verifier
+    patchloop.dev/role: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: verifier
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: verifier
+        app.kubernetes.io/part-of: patchloop
+        patchloop.dev/role: worker
+    spec:
+      serviceAccountName: verifier
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: verifier
+          image: patchloop-verifier
+          envFrom:
+            - configMapRef: { name: patchloop-config }
+            - secretRef: { name: patchloop-secrets }
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 2Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 2Gi }

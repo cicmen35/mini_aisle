@@ -1,0 +1,16 @@
+# Dev-only stand-ins for managed services (RDS, SQS, S3). On AWS these don't exist in-cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: patchloop-deps
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: patchloop-deps
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - localstack.yaml
+  - infra-job.yaml
+  - networkpolicies.yaml

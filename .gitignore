@@ -21,7 +21,7 @@ dist/
 *.tfplan
 crash.log
 .terraform.tfstate.lock.info
-infra/terraform/envs/aws/terraform.tfvars
+**/terraform.tfvars
 
 # kind / misc
 .kube/
@@ -29,3 +29,4 @@ infra/terraform/envs/aws/terraform.tfvars
 .DS_Store
 .idea/
 .vscode/
+.tflint.d/

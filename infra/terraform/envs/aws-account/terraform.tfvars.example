@@ -1,0 +1,5 @@
+# cp terraform.tfvars.example terraform.tfvars   (git-ignored)
+aws_account_id        = "123456789012"
+alert_email           = "you@example.com"
+budget_thresholds_usd = [10, 25, 50]
+# activate_cost_allocation_tags = true   # >= 24h after the first `make aws-up`

@@ -1,0 +1,10 @@
+**
+!pyproject.toml
+!uv.lock
+!packages/**
+!services/**
+!infra/terraform/**
+**/__pycache__
+**/*.pyc
+**/.terraform
+**/*.tfstate*

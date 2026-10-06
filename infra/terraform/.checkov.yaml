@@ -1,0 +1,29 @@
+# Checkov config for infra/terraform. Every skip is a deliberate trade-off for a short-lived,
+# low-cost demo environment, and each one is an interview talking point ("what would you change
+# for production?"). Remove a skip when you harden the corresponding resource.
+framework:
+  - terraform
+compact: true
+quiet: true
+download-external-modules: false
+skip-check:
+  # --- cost: production would enable these --------------------------------------------------
+  - CKV_AWS_338   # log retention >= 1y: demo keeps 1 day to stay near-free
+  - CKV_AWS_158   # CloudWatch Logs KMS CMK: $1/month per key; AWS-managed encryption is used
+  - CKV_AWS_136   # ECR KMS CMK: AES256 (AWS-managed) is used instead
+  - CKV_AWS_145   # S3 KMS CMK: SSE-S3 (AES256) + bucket keys is used instead
+  - CKV_AWS_337   # SSM KMS CMK: SecureString with the AWS-managed aws/ssm key
+  - CKV_AWS_144   # S3 cross-region replication: doubles storage, pointless for scratch artifacts
+  - CKV_AWS_18    # S3 access logging: needs a second bucket; CloudTrail covers the demo
+  - CKV2_AWS_62   # S3 event notifications: nothing consumes them
+  - CKV_AWS_157   # RDS Multi-AZ: doubles the instance cost
+  - CKV_AWS_118   # RDS enhanced monitoring: extra CloudWatch cost
+  - CKV_AWS_353   # RDS Performance Insights: not free on t4g.micro beyond 7 days, not needed
+  - CKV_AWS_293   # RDS deletion protection: the env must be destroyable with one command
+  - CKV_AWS_65    # ECS Container Insights: extra CloudWatch cost
+  - CKV2_AWS_11   # VPC flow logs: extra CloudWatch cost
+  # --- architecture: no NAT gateway (~$33/month) -> tasks need public IPs for egress ----------
+  - CKV_AWS_333   # ECS public IP: mitigated by SGs with no ingress (workers) / allow-listed CIDRs (API)
+  # --- false positives ------------------------------------------------------------------------
+  - CKV2_AWS_5    # SGs are attached through the ecs_service / rds_postgres modules
+  - CKV_AWS_394   # AZ data source: only the first var.az_count zones are used (slice)

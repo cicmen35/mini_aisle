@@ -19,6 +19,10 @@ if ! kind get clusters | grep -qx "$CLUSTER"; then
   kind create cluster --name "$CLUSTER" --wait 120s --config - <<'EOF'
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  # nftables, not iptables: kube-proxy's iptables mode needs the xt_statistic module,
+  # which some kernels (this one included) don't ship. nftables is in Kubernetes 1.31.
+  kubeProxyMode: nftables
 nodes:
   - role: control-plane
 EOF
@@ -28,11 +32,27 @@ kubectl config use-context "kind-$CLUSTER" >/dev/null
 echo "==> Building images"
 make -C "$ROOT" images TAG=local
 echo "==> Loading images into kind"
+# `kind load` imports with --all-platforms, which fails on images whose index references
+# blobs that aren't in the saved archive (LocalStack 4.14). Fall back to a plain ctr import.
+load_image() {
+  local image="$1"
+  if kind load docker-image --name "$CLUSTER" "$image"; then
+    return 0
+  fi
+  echo "kind load failed for $image; importing the archive directly"
+  if docker save "$image" | docker exec -i "${CLUSTER}-control-plane" \
+    ctr --namespace=k8s.io images import --snapshotter=overlayfs -; then
+    return 0
+  fi
+  # Public images only: pull inside the node (kind's ctr import chokes on some indexes).
+  echo "archive import failed for $image; pulling it inside the node"
+  docker exec "${CLUSTER}-control-plane" crictl pull "$image"
+}
 for img in api scanner fixer verifier infra; do
-  kind load docker-image --name "$CLUSTER" "patchloop-$img:local"
+  load_image "patchloop-$img:local"
 done
-docker pull -q localstack/localstack:4.14 >/dev/null && kind load docker-image --name "$CLUSTER" localstack/localstack:4.14
-docker pull -q postgres:16-alpine >/dev/null && kind load docker-image --name "$CLUSTER" postgres:16-alpine
+docker pull -q localstack/localstack:4.14 >/dev/null && load_image localstack/localstack:4.14
+docker pull -q postgres:16-alpine >/dev/null && load_image postgres:16-alpine
 
 echo "==> metrics-server (for the API HPA)"
 kubectl apply -f "https://github.com/kubernetes-sigs/metrics-server/releases/download/${METRICS_SERVER_VERSION}/components.yaml" >/dev/null
@@ -44,7 +64,7 @@ if [[ "$KEDA" == "1" ]]; then
   echo "==> KEDA $KEDA_VERSION"
   kubectl apply --server-side -f "https://github.com/kedacore/keda/releases/download/v${KEDA_VERSION}/keda-${KEDA_VERSION}.yaml" >/dev/null
   kubectl -n keda rollout status deploy/keda-operator --timeout=180s
-  kubectl -n keda rollout status deploy/keda-operator-metrics-apiserver --timeout=180s
+  kubectl -n keda rollout status deploy/keda-metrics-apiserver --timeout=180s
   overlay="$ROOT/deploy/k8s/overlays/kind-keda"
 fi
 

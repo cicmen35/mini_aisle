@@ -1,0 +1,19 @@
+[project]
+name = "patchloop-scanner"
+version = "0.1.0"
+description = "patchloop scanner worker: runs Semgrep, Bandit and pip-audit on submitted code."
+requires-python = ">=3.12,<3.13"
+dependencies = ["patchloop-core"]
+
+[project.scripts]
+patchloop-scanner = "patchloop_scanner.main:main"
+
+[tool.uv.sources]
+patchloop-core = { workspace = true }
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/patchloop_scanner"]

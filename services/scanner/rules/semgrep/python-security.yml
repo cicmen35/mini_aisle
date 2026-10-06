@@ -1,0 +1,67 @@
+# Offline rule pack baked into the scanner image (the sandbox never fetches the Semgrep registry).
+rules:
+  - id: patchloop.python.sql-injection-string-format
+    languages: [python]
+    severity: ERROR
+    message: SQL built with string formatting/concatenation is passed to execute(). Use parameters.
+    metadata: {cwe: "CWE-89", category: security}
+    patterns:
+      - pattern-either:
+          - pattern: $CUR.execute(f"...", ...)
+          - pattern: $CUR.execute("..." % $X, ...)
+          - pattern: $CUR.execute("..." + $X, ...)
+          - pattern: $CUR.execute("...".format(...), ...)
+          - pattern: |
+              $Q = f"..."
+              ...
+              $CUR.execute($Q, ...)
+
+  - id: patchloop.python.command-injection-shell-true
+    languages: [python]
+    severity: ERROR
+    message: subprocess with shell=True and a non-literal command enables command injection.
+    metadata: {cwe: "CWE-78", category: security}
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FN($CMD, ..., shell=True, ...)
+      - pattern-not: subprocess.$FN("...", ..., shell=True, ...)
+
+  - id: patchloop.python.os-system
+    languages: [python]
+    severity: ERROR
+    message: os.system/os.popen with a non-literal command enables command injection.
+    metadata: {cwe: "CWE-78", category: security}
+    patterns:
+      - pattern-either:
+          - pattern: os.system($CMD)
+          - pattern: os.popen($CMD, ...)
+      - pattern-not: os.system("...")
+
+  - id: patchloop.python.unsafe-deserialization
+    languages: [python]
+    severity: ERROR
+    message: Deserializing untrusted data with pickle/yaml.load can execute arbitrary code.
+    metadata: {cwe: "CWE-502", category: security}
+    pattern-either:
+      - pattern: pickle.loads(...)
+      - pattern: pickle.load(...)
+      - pattern: yaml.load(..., Loader=yaml.Loader, ...)
+      - pattern: yaml.load(..., Loader=yaml.UnsafeLoader, ...)
+
+  - id: patchloop.python.path-traversal-join
+    languages: [python]
+    severity: WARNING
+    message: A user-controlled path is joined and opened without checking it stays in the base dir.
+    metadata: {cwe: "CWE-22", category: security}
+    patterns:
+      - pattern-either:
+          - pattern: open(os.path.join(...), ...)
+          - patterns:
+              - pattern-inside: |
+                  $P = os.path.join(...)
+                  ...
+              - pattern: open($P, ...)
+      - pattern-not-inside: |
+          if not $X.startswith(...):
+            ...
+          ...
